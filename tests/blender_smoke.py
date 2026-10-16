@@ -128,6 +128,11 @@ def run():
     s = wave.data.splines[0]
     check("simplify polyline to bezier", s.type == "BEZIER" and len(s.bezier_points) < 20, str(len(s.bezier_points)))
 
+    select_only(wave)
+    bpy.ops.curve.illu_resample(mode="COUNT", count=9, smooth=False, keep_corners=False)
+    check("resample to a point count", len(wave.data.splines[0].bezier_points) == 9,
+          str(len(wave.data.splines[0].bezier_points)))
+
     bpy.ops.curve.illu_outline_stroke(width=0.2, cap="ROUND", keep_original=True)
     out = bpy.context.active_object
     check("outline stroke of open wave", out is not wave and len(out.data.splines) >= 1 and area(out) > 0.5,

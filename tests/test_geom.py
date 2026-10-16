@@ -14,6 +14,7 @@ from illustrator_curves.geom.fit import fit_polyline, simplify_path  # noqa: E40
 from illustrator_curves.geom.offset import offset_paths, outline_paths  # noqa: E402
 from illustrator_curves.geom.path import Path  # noqa: E402
 from illustrator_curves.geom.pen import PenState, constrain_45  # noqa: E402
+from illustrator_curves.geom.resample import resample_path  # noqa: E402
 
 
 def square(x, y, s):
@@ -213,6 +214,38 @@ class TestFit:
         for pt in pts[::7]:
             d = min(bz._dist_point_segment(pt, a, b) for a, b in zip(poly, poly[1:]))
             assert d < 4e-3
+
+
+class TestResample:
+    def test_line_by_spacing(self):
+        p = Path.from_polyline([(0, 0), (10, 0)], closed=False)
+        r = resample_path(p, spacing=2.0, smooth=False, keep_corners=False)
+        assert [n.co[0] for n in r.nodes] == pytest.approx([0, 2, 4, 6, 8, 10])
+
+    def test_square_keeps_corners_and_midpoints(self):
+        r = resample_path(square(0, 0, 2), count=8, smooth=False)
+        assert len(r.nodes) == 8
+        got = {(round(n.co[0], 5), round(n.co[1], 5)) for n in r.nodes}
+        assert got == {(0, 0), (1, 0), (2, 0), (2, 1), (2, 2), (1, 2), (0, 2), (0, 1)}
+        assert r.area(1e-5) == pytest.approx(4.0)
+
+    def test_circle_count_is_even_and_stays_round(self):
+        r = resample_path(circle(0, 0, 1), count=8, smooth=True, keep_corners=False)
+        assert len(r.nodes) == 8
+        dists = [bz.dist(r.nodes[i].co, r.nodes[(i + 1) % 8].co) for i in range(8)]
+        assert max(dists) - min(dists) < 1e-6
+        assert r.area(1e-5) == pytest.approx(math.pi, rel=2e-3)
+        for n in r.nodes:
+            assert bz.dist(n.co, (0, 0)) == pytest.approx(1.0, abs=1e-6)
+
+    def test_open_count_includes_endpoints(self):
+        p = Path.from_polyline([(0, 0), (3, 0), (3, 4)], closed=False)
+        r = resample_path(p, count=5, smooth=False, keep_corners=False)
+        assert len(r.nodes) == 5
+        expected = [(0, 0), (1.75, 0), (3, 0.5), (3, 2.25), (3, 4)]
+        assert len(r.nodes) == 5
+        for got, want in zip(r.nodes, expected):
+            assert got.co == pytest.approx(want)
 
 
 class TestPen:

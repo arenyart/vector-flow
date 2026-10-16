@@ -1,12 +1,13 @@
 import math
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty, FloatProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty
 
 from . import bridge
 from .geom.fillet import fillet_path
 from .geom.fit import simplify_path
 from .geom.offset import offset_paths, outline_paths
+from .geom.resample import resample_path
 
 JOINS = [
     ("MITER", "Miter", "Sharp corners, falling back to bevel past the miter limit"),
@@ -258,9 +259,77 @@ class CURVE_OT_illu_simplify(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class CURVE_OT_illu_resample(bpy.types.Operator):
+    """Resample: redistribute points evenly along each path. In Edit Mode only splines with selected points are affected"""
+
+    bl_idname = "curve.illu_resample"
+    bl_label = "Resample Path"
+    bl_options = {"REGISTER", "UNDO"}
+
+    mode: EnumProperty(name="Mode", items=[
+        ("COUNT", "Count", "Use this many points, spaced evenly by length"),
+        ("LENGTH", "Length", "Place a point about every given distance"),
+    ], default="COUNT")
+    count: IntProperty(name="Points", default=16, min=2, max=10000,
+                       description="Number of points on each path")
+    spacing: FloatProperty(name="Spacing", default=0.1, min=1e-5, soft_max=10.0, subtype="DISTANCE",
+                           unit="LENGTH", description="Target distance between points")
+    smooth: BoolProperty(name="Smooth", default=True,
+                         description="Fit a smooth curve through the new points. Off keeps straight segments")
+    keep_corners: BoolProperty(name="Keep Corners", default=True,
+                               description="Leave sharp corners where they are and resample the spans between them")
+    corner_angle: FloatProperty(name="Corner Angle", default=math.radians(35.0), min=math.radians(1.0),
+                                max=math.radians(179.0), subtype="ANGLE",
+                                description="Bends sharper than this stay put")
+
+    @classmethod
+    def poll(cls, context):
+        return _poll_curves(context) and context.mode in {"OBJECT", "EDIT_CURVE"}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.prop(self, "mode")
+        if self.mode == "COUNT":
+            layout.prop(self, "count")
+        else:
+            layout.prop(self, "spacing")
+        layout.prop(self, "smooth")
+        layout.prop(self, "keep_corners")
+        if self.keep_corners:
+            layout.prop(self, "corner_angle")
+
+    def execute(self, context):
+        prev = bridge.ensure_object_mode(context)
+        edit = prev == "EDIT_CURVE"
+        objs = [context.active_object] if edit else _targets(context)
+        before = after = 0
+        for obj in objs:
+            paths, z, _ = bridge.read_paths(obj)
+            out = []
+            for p in paths:
+                if edit and not any(n.selected for n in p.nodes):
+                    out.append(p)
+                    continue
+                before += len(p.nodes)
+                if self.mode == "COUNT":
+                    q = resample_path(p, count=self.count, smooth=self.smooth,
+                                      keep_corners=self.keep_corners, corner_angle=self.corner_angle)
+                else:
+                    q = resample_path(p, spacing=self.spacing, smooth=self.smooth,
+                                      keep_corners=self.keep_corners, corner_angle=self.corner_angle)
+                after += len(q.nodes)
+                out.append(_mark_modified([q])[0])
+            bridge.write_paths(obj.data, out, z)
+        bridge.restore_mode(prev)
+        self.report({"INFO"}, "Resample: %d → %d points" % (before, after))
+        return {"FINISHED"}
+
+
 classes = (
     CURVE_OT_illu_offset,
     CURVE_OT_illu_outline_stroke,
     CURVE_OT_illu_fillet,
     CURVE_OT_illu_simplify,
+    CURVE_OT_illu_resample,
 )

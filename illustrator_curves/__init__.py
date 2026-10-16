@@ -1,10 +1,10 @@
 bl_info = {
     "name": "Illustrator Curves",
     "author": "Illustrator Curves contributors",
-    "version": (1, 0, 0),
+    "version": (1, 1, 0),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Illustrator, Toolbar > Pen, Add > Curve",
-    "description": "Pen tool, Pathfinder booleans, offset path, outline stroke, round corners and simplify for curves",
+    "description": "Pen tool, Pathfinder booleans, offset path, outline stroke, round corners, simplify and resample for curves",
     "category": "Add Curve",
 }
 
