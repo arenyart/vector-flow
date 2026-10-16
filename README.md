@@ -18,7 +18,7 @@ All operators support Blender's *Adjust Last Operation* panel, so you can drag t
 
 Requires Blender **4.2 or newer** (tested on 4.5 LTS).
 
-1. Build the extension zip (or download it from a release):
+1. Download the prebuilt [`releases/illustrator_curves-1.0.0.zip`](releases/illustrator_curves-1.0.0.zip), or build it yourself:
    ```bash
    blender --command extension build --source-dir illustrator_curves --output-dir dist
    ```
