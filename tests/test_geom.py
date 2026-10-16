@@ -15,6 +15,8 @@ from illustrator_curves.geom.offset import offset_paths, outline_paths  # noqa: 
 from illustrator_curves.geom.path import Path  # noqa: E402
 from illustrator_curves.geom.pen import PenState, constrain_45  # noqa: E402
 from illustrator_curves.geom.resample import resample_path  # noqa: E402
+from illustrator_curves.geom.cleanup import remove_doubles  # noqa: E402
+from illustrator_curves.geom.path import Node  # noqa: E402
 
 
 def square(x, y, s):
@@ -246,6 +248,52 @@ class TestResample:
         assert len(r.nodes) == 5
         for got, want in zip(r.nodes, expected):
             assert got.co == pytest.approx(want)
+
+
+class TestRemoveDoubles:
+    def test_consecutive_duplicates(self):
+        p = Path.from_polyline([(0, 0), (1, 0), (1, 0), (2, 0)], closed=False)
+        r = remove_doubles(p, 1e-6)
+        assert [n.co for n in r.nodes] == pytest.approx([(0, 0), (1, 0), (2, 0)])
+        assert r.closed is False
+
+    def test_closed_seam(self):
+        p = Path.from_polyline([(0, 0), (0, 0), (1, 0), (1, 1), (0, 1)], closed=True)
+        r = remove_doubles(p, 1e-6)
+        assert len(r.nodes) == 4
+        assert r.closed is True
+        assert r.area(1e-6) == pytest.approx(1.0)
+
+    def test_keeps_points_outside_distance(self):
+        p = Path.from_polyline([(0, 0), (0.05, 0), (1, 0)], closed=False)
+        r = remove_doubles(p, 0.01)
+        assert len(r.nodes) == 3
+
+    def test_welds_open_ends(self):
+        p = Path.from_polyline([(0, 0), (1, 0), (1, 1), (0, 0.00005)], closed=False)
+        r = remove_doubles(p, 0.001)
+        assert r.closed is True
+        assert len(r.nodes) == 3
+        assert r.area(1e-5) == pytest.approx(0.5, abs=1e-3)
+
+    def test_preserves_handles_around_the_join(self):
+        a = Node((0, 0), hl=(-1, 0.5), hr=(0.2, 1))
+        b = Node((0, 0), hl=(0, -1), hr=(1, -0.25))
+        c = Node((2, 0), hl=(1, 0), hr=(3, 0))
+        r = remove_doubles(Path([a, b, c], closed=False), 1e-9)
+        assert len(r.nodes) == 2
+        assert r.nodes[0].hl == pytest.approx((-1, 0.5))
+        assert r.nodes[0].hr == pytest.approx((1, -0.25))
+        assert r.nodes[1].co == pytest.approx((2, 0))
+
+    def test_selected_only(self):
+        p = Path.from_polyline([(0, 0), (0, 0), (1, 0)], closed=False)
+        p.nodes[0].selected = True
+        r = remove_doubles(p, 1e-6, selected_only=True)
+        assert len(r.nodes) == 3
+        p.nodes[1].selected = True
+        r = remove_doubles(p, 1e-6, selected_only=True)
+        assert len(r.nodes) == 2
 
 
 class TestPen:

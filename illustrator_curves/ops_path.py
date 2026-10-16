@@ -8,6 +8,7 @@ from .geom.fillet import fillet_path
 from .geom.fit import simplify_path
 from .geom.offset import offset_paths, outline_paths
 from .geom.resample import resample_path
+from .geom.cleanup import remove_doubles
 
 JOINS = [
     ("MITER", "Miter", "Sharp corners, falling back to bevel past the miter limit"),
@@ -326,10 +327,53 @@ class CURVE_OT_illu_resample(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class CURVE_OT_illu_remove_doubles(bpy.types.Operator):
+    """Remove Doubles: weld neighboring points closer than the distance. In Edit Mode only selected points are merged"""
+
+    bl_idname = "curve.illu_remove_doubles"
+    bl_label = "Remove Doubles"
+    bl_options = {"REGISTER", "UNDO"}
+
+    distance: FloatProperty(name="Distance", default=0.0001, min=0.0, soft_max=1.0, subtype="DISTANCE",
+                            unit="LENGTH", precision=5,
+                            description="Neighboring points closer than this are welded")
+    weld_ends: BoolProperty(name="Weld Ends", default=True,
+                            description="Close an open path when its first and last points are within the distance")
+
+    @classmethod
+    def poll(cls, context):
+        return _poll_curves(context) and context.mode in {"OBJECT", "EDIT_CURVE"}
+
+    def execute(self, context):
+        prev = bridge.ensure_object_mode(context)
+        edit = prev == "EDIT_CURVE"
+        objs = [context.active_object] if edit else _targets(context)
+        before = after = 0
+        for obj in objs:
+            paths, z, _ = bridge.read_paths(obj)
+            out = []
+            for p in paths:
+                if edit and not any(n.selected for n in p.nodes):
+                    out.append(p)
+                    continue
+                before += len(p.nodes)
+                q = remove_doubles(p, self.distance, selected_only=edit, weld_ends=self.weld_ends)
+                after += len(q.nodes)
+                if len(q.nodes) != len(p.nodes) or q.closed != p.closed:
+                    _mark_modified([q])
+                out.append(q)
+            bridge.write_paths(obj.data, out, z)
+        bridge.restore_mode(prev)
+        removed = before - after
+        self.report({"INFO"}, "Removed %d point%s" % (removed, "" if removed == 1 else "s"))
+        return {"FINISHED"}
+
+
 classes = (
     CURVE_OT_illu_offset,
     CURVE_OT_illu_outline_stroke,
     CURVE_OT_illu_fillet,
     CURVE_OT_illu_simplify,
     CURVE_OT_illu_resample,
+    CURVE_OT_illu_remove_doubles,
 )

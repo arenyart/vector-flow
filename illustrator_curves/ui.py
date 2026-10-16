@@ -68,8 +68,9 @@ class VIEW3D_PT_illu_path(bpy.types.Panel):
         col.operator("curve.illu_fillet", text="Chamfer Corners", icon="LINCURVE").mode = "CHAMFER"
         col.operator("curve.illu_simplify", icon="MOD_DECIM")
         col.operator("curve.illu_resample", icon="MOD_LENGTH")
+        col.operator("curve.illu_remove_doubles", icon="X")
         if context.mode == "EDIT_CURVE":
-            layout.label(text="Corners: selected points only", icon="RESTRICT_SELECT_OFF")
+            layout.label(text="Edit Mode: selected points only", icon="RESTRICT_SELECT_OFF")
 
 
 def edit_menu(self, context):
@@ -78,6 +79,7 @@ def edit_menu(self, context):
     layout.operator("curve.illu_fillet", icon="SPHERECURVE")
     layout.operator("curve.illu_simplify", icon="MOD_DECIM")
     layout.operator("curve.illu_resample", icon="MOD_LENGTH")
+    layout.operator("curve.illu_remove_doubles", icon="X")
 
 
 def object_menu(self, context):

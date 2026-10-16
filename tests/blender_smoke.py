@@ -133,6 +133,19 @@ def run():
     check("resample to a point count", len(wave.data.splines[0].bezier_points) == 9,
           str(len(wave.data.splines[0].bezier_points)))
 
+    doubles = bridge.new_curve_data("Doubles")
+    sp = doubles.splines.new("POLY")
+    sp.points.add(3)
+    for p, co in zip(sp.points, ((0, 0), (1, 0), (1, 0), (2, 0))):
+        p.co = (co[0], co[1], 0, 1)
+    doubles_obj = bpy.data.objects.new("Doubles", doubles)
+    bpy.context.collection.objects.link(doubles_obj)
+    select_only(doubles_obj)
+    bpy.ops.curve.illu_remove_doubles(distance=0.001)
+    check("remove doubles", len(doubles_obj.data.splines[0].bezier_points) == 3,
+          str(len(doubles_obj.data.splines[0].bezier_points)))
+
+    select_only(wave)
     bpy.ops.curve.illu_outline_stroke(width=0.2, cap="ROUND", keep_original=True)
     out = bpy.context.active_object
     check("outline stroke of open wave", out is not wave and len(out.data.splines) >= 1 and area(out) > 0.5,
