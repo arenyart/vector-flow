@@ -10,7 +10,7 @@ that plague naive edge-shifting offsets.
 import math
 
 from .fit import fit_polyline
-from .path import polygon_area
+from .path import paths_diagonal, polygon_area, separate_touching
 from .planar import overlay
 
 MITER = "MITER"
@@ -139,7 +139,7 @@ def _fit_loops(loops, fit_error, corner_angle, fit):
             p = Path.from_polyline(pts, True)
         if p is not None and p.nodes:
             out.append(p)
-    return out
+    return separate_touching(out, max(paths_diagonal(out), 1e-9) * 1e-5)
 
 
 def offset_paths(paths, distance, join=ROUND, miter_limit=4.0, tol=1e-3, fit=True,

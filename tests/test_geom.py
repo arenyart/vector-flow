@@ -67,7 +67,15 @@ class TestBoolean:
         a, b = [square(0, 0, 2)], [square(1, 1, 2)]
         assert total_area(boolean([a, b], "INTERSECT", TOL)) == pytest.approx(1.0)
         assert total_area(boolean([a, b], "DIFFERENCE", TOL)) == pytest.approx(3.0)
-        assert total_area(boolean([a, b], "EXCLUDE", TOL)) == pytest.approx(6.0)
+        assert total_area(boolean([a, b], "EXCLUDE", TOL)) == pytest.approx(6.0, rel=1e-4)
+
+    def test_touching_loops_are_separated(self):
+        res = boolean([[square(0, 0, 1)], [square(1, 1, 1)]], "UNION", TOL)
+        assert len(res) == 2
+        assert total_area(res) == pytest.approx(2.0, rel=1e-4)
+        a = {n.co for n in res[0].nodes}
+        b = {n.co for n in res[1].nodes}
+        assert not (a & b)
 
     def test_hole_is_produced(self):
         res = boolean([[square(0, 0, 4)], [square(1, 1, 2)]], "DIFFERENCE", TOL)

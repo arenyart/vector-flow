@@ -149,6 +149,49 @@ def paths_diagonal(paths):
     return math.hypot(b[2] - b[0], b[3] - b[1])
 
 
+def separate_touching(paths, eps):
+    """Pull apart vertices shared by several loops (or twice by one loop).
+
+    Region boundaries legitimately touch at single points, but Blender's 2D
+    curve fill misreads touching splines and drops whole islands. Each copy of
+    a shared vertex is moved ``eps`` towards the interior of its own loop
+    (loops must have the filled region on their left).
+    """
+    def key(c):
+        return (round(c[0] / eps), round(c[1] / eps))
+
+    counts = {}
+    for p in paths:
+        for n in p.nodes:
+            k = key(n.co)
+            counts[k] = counts.get(k, 0) + 1
+    for p in paths:
+        segs = p.segments()
+        m = len(segs)
+        if not p.closed or m == 0:
+            continue
+        for i, n in enumerate(p.nodes):
+            if counts.get(key(n.co), 0) < 2:
+                continue
+            tin = bz.tangent_end(segs[i - 1])
+            tout = bz.tangent_start(segs[i % m])
+            li, lo = math.hypot(*tin), math.hypot(*tout)
+            if li == 0 or lo == 0:
+                continue
+            tin = (tin[0] / li, tin[1] / li)
+            tout = (tout[0] / lo, tout[1] / lo)
+            bx, by = -tin[1] - tout[1], tin[0] + tout[0]
+            bl = math.hypot(bx, by)
+            if bl < 1e-9:
+                bx, by = tout[0] - tin[0], tout[1] - tin[1]
+                bl = math.hypot(bx, by)
+            dx, dy = bx / bl * eps, by / bl * eps
+            n.co = (n.co[0] + dx, n.co[1] + dy)
+            n.hl = (n.hl[0] + dx, n.hl[1] + dy)
+            n.hr = (n.hr[0] + dx, n.hr[1] + dy)
+    return paths
+
+
 def assign_handle_types(path, eps=1e-6):
     """Pick Blender handle types that reproduce the geometry without distorting it.
 

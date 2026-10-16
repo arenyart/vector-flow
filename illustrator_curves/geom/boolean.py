@@ -1,7 +1,7 @@
 """Pathfinder-style booleans that keep the original Bezier geometry."""
 
 from . import bezier as bz
-from .path import Path
+from .path import Path, paths_diagonal, separate_touching
 from .planar import overlay
 
 UNION = "UNION"
@@ -117,4 +117,5 @@ def boolean(groups, op, tol):
         return []
     loops, sources = build_loops(groups, tol)
     out = overlay(loops, len(groups), _predicate(op, len(groups)))
-    return [loop_to_path(l, sources) for l in out]
+    result = [loop_to_path(l, sources) for l in out]
+    return separate_touching(result, max(paths_diagonal(result), 1e-9) * 1e-5)

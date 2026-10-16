@@ -26,6 +26,15 @@ def area(obj):
     return sum(p.area(1e-4) for p in paths)
 
 
+def mesh_area(obj):
+    dg = bpy.context.evaluated_depsgraph_get()
+    ev = obj.evaluated_get(dg)
+    me = ev.to_mesh()
+    a = sum(p.area for p in me.polygons)
+    ev.to_mesh_clear()
+    return a
+
+
 def select_only(*objs):
     bpy.ops.object.select_all(action="DESELECT")
     for o in objs:
@@ -136,6 +145,30 @@ def run():
     bpy.ops.curve.illu_boolean(operation="UNION")
     check("union of splines in one object", abs(area(bpy.context.active_object) - 4) < 5e-3,
           "%.4f" % area(bpy.context.active_object))
+
+    # touching results must still be filled correctly by Blender's 2D fill
+    bpy.ops.curve.illu_add_rectangle(width=1, height=1, location=(20.5, 0.5, 0))
+    t1 = bpy.context.active_object
+    bpy.ops.curve.illu_add_rectangle(width=1, height=1, location=(21.5, 1.5, 0))
+    t2 = bpy.context.active_object
+    select_only(t1, t2)
+    bpy.ops.curve.illu_boolean(operation="UNION")
+    res = bpy.context.active_object
+    check("corner-touching union filled by Blender", abs(mesh_area(res) - 2.0) < 1e-3,
+          "mesh %.4f, %d splines" % (mesh_area(res), len(res.data.splines)))
+
+    bpy.ops.curve.illu_add_star(points=5, radius_outer=1, radius_inner=0.45, location=(30, 0, 0))
+    st = bpy.context.active_object
+    bpy.ops.curve.illu_offset(distance=0.12, join="MITER")
+    so = bpy.context.active_object
+    bpy.context.scene.cursor.location = (30, 0, 0)
+    bpy.ops.curve.illu_add_ellipse(radius_x=1, radius_y=1, location=(30, 0, 0))
+    el = bpy.context.active_object
+    select_only(el, st, so)
+    bpy.ops.curve.illu_boolean(operation="EXCLUDE")
+    res = bpy.context.active_object
+    check("exclude with touching islands filled by Blender", abs(mesh_area(res) - area(res)) < 2e-3,
+          "mesh %.4f vs path %.4f" % (mesh_area(res), area(res)))
 
     check("pen tool registered", hasattr(bpy.types, "CURVE_OT_illu_pen") or "curve.illu_pen" in dir(bpy.ops.curve))
     illustrator_curves.unregister()

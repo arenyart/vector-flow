@@ -8,17 +8,21 @@ bl_info = {
     "category": "Add Curve",
 }
 
-if "bpy" in locals():
-    import importlib
+try:
+    import bpy
+except ImportError:  # imported outside Blender, e.g. to use or test the geom package
+    bpy = None
 
-    for _m in (geom, bridge, settings, ops_pathfinder, ops_path, ops_shapes, ops_pen, ui):  # noqa: F821
-        importlib.reload(_m)
+if bpy is not None:
+    if "ops_pen" in locals():
+        import importlib
 
-import bpy  # noqa: E402
+        for _m in (geom, bridge, settings, ops_pathfinder, ops_path, ops_shapes, ops_pen, ui):  # noqa: F821
+            importlib.reload(_m)
 
-from . import geom, bridge, settings, ops_pathfinder, ops_path, ops_shapes, ops_pen, ui  # noqa: E402,F401
+    from . import geom, bridge, settings, ops_pathfinder, ops_path, ops_shapes, ops_pen, ui  # noqa: F401
 
-_modules = (settings, ops_pathfinder, ops_path, ops_shapes, ops_pen, ui)
+    _modules = (settings, ops_pathfinder, ops_path, ops_shapes, ops_pen, ui)
 
 
 def register():
