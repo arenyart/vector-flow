@@ -1,0 +1,13 @@
+schema_version = "1.0.0"
+
+id = "illustrator_curves"
+version = "1.0.0"
+name = "Illustrator Curves"
+tagline = "Pen tool, Pathfinder, offset, outline and fillets for curves"
+maintainer = "Illustrator Curves contributors"
+type = "add-on"
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+tags = ["Add Curve", "Modeling"]
