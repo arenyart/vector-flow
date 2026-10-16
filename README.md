@@ -35,6 +35,8 @@ ln -s "$PWD/illustrator_curves" ~/.config/blender/4.5/extensions/user_default/il
 
 Open the **Illustrator** tab in the 3D viewport sidebar (`N`).
 
+To see every tool at once, run `blender --python examples/showcase.py`. It builds a demo scene with all the Pathfinder operations, an offset, an outline stroke and two corner styles.
+
 ### Pen tool
 
 Start it from the toolbar (the **Pen** tool in Object Mode) or with the *Pen Tool* button.
