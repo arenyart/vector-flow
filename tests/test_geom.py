@@ -16,6 +16,7 @@ from illustrator_curves.geom.path import Path  # noqa: E402
 from illustrator_curves.geom.pen import PenState, constrain_45  # noqa: E402
 from illustrator_curves.geom.resample import resample_path  # noqa: E402
 from illustrator_curves.geom.cleanup import remove_doubles  # noqa: E402
+from illustrator_curves.geom.chisel import chisel_mesh, mesh_volume  # noqa: E402
 from illustrator_curves.geom.path import Node  # noqa: E402
 
 
@@ -294,6 +295,47 @@ class TestRemoveDoubles:
         p.nodes[1].selected = True
         r = remove_doubles(p, 1e-6, selected_only=True)
         assert len(r.nodes) == 2
+
+
+class TestChisel:
+    def test_square_frustum(self):
+        # 2x2 square inset by 0.2 is a 1.6x1.6 top. Volume is the pyramidal frustum.
+        mesh = chisel_mesh([square(0, 0, 2)], width=0.2, height=0.5, tol=1e-4, join="MITER")
+        assert mesh is not None
+        verts, faces = mesh
+        assert any(abs(v[2] - 0.5) < 1e-6 for v in verts)
+        assert any(abs(v[2]) < 1e-6 for v in verts)
+        a1, a2, h = 4.0, 1.6 * 1.6, 0.5
+        expected = h / 3.0 * (a1 + a2 + math.sqrt(a1 * a2))
+        assert mesh_volume(verts, faces) == pytest.approx(expected, rel=0.02)
+        from collections import Counter
+        edges = Counter()
+        for f in faces:
+            for a, b in zip(f, f[1:] + f[:1]):
+                edges[tuple(sorted((a, b)))] += 1
+        assert all(n == 2 for n in edges.values())
+
+    def test_inset_too_deep_collapses(self):
+        assert chisel_mesh([square(0, 0, 2)], width=2.0, height=0.2, tol=1e-4, join="MITER") is None
+
+    def test_ring_with_a_hole(self):
+        outer = square(0, 0, 4)
+        hole = square(1, 1, 2)
+        mesh = chisel_mesh([outer, hole], width=0.2, height=0.4, tol=1e-4, join="MITER")
+        assert mesh is not None
+        verts, faces = mesh
+        # Bottom area 12, top is outer 3.6^2 minus hole 2.4^2.
+        bottom, top, h = 12.0, 3.6 * 3.6 - 2.4 * 2.4, 0.4
+        band = bottom - top
+        expected = top * h + band * h * 0.5
+        assert mesh_volume(verts, faces) == pytest.approx(expected, rel=0.05)
+        assert max(v[2] for v in verts) == pytest.approx(0.4, abs=1e-6)
+
+    def test_convex_profile_is_a_closed_solid(self):
+        mesh = chisel_mesh([square(0, 0, 2)], width=0.3, height=0.4, tol=1e-4, join="MITER",
+                           divisions=3, profile="CONVEX")
+        assert mesh is not None
+        assert mesh_volume(*mesh) > 0.5
 
 
 class TestPen:

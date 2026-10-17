@@ -62,6 +62,7 @@ class VIEW3D_PT_illu_path(bpy.types.Panel):
         layout = self.layout
         col = layout.column(align=True)
         col.operator("curve.illu_offset", icon="MOD_SKIN")
+        col.operator("curve.illu_chisel", icon="MOD_BEVEL")
         col.operator("curve.illu_outline_stroke", icon="MOD_OUTLINE")
         col = layout.column(align=True)
         col.operator("curve.illu_fillet", icon="SPHERECURVE").mode = "ROUND"
@@ -89,6 +90,7 @@ def object_menu(self, context):
     layout.separator()
     layout.menu("VIEW3D_MT_illu_pathfinder")
     layout.operator("curve.illu_offset", icon="MOD_SKIN")
+    layout.operator("curve.illu_chisel", icon="MOD_BEVEL")
     layout.operator("curve.illu_outline_stroke", icon="MOD_OUTLINE")
 
 

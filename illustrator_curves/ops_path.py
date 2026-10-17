@@ -9,6 +9,7 @@ from .geom.fit import simplify_path
 from .geom.offset import offset_paths, outline_paths
 from .geom.resample import resample_path
 from .geom.cleanup import remove_doubles
+from .geom.chisel import chisel_mesh
 
 JOINS = [
     ("MITER", "Miter", "Sharp corners, falling back to bevel past the miter limit"),
@@ -369,6 +370,94 @@ class CURVE_OT_illu_remove_doubles(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class CURVE_OT_illu_chisel(bpy.types.Operator):
+    """Chisel: inset the shape, raise the inset, and loft the original edge up to it"""
+
+    bl_idname = "curve.illu_chisel"
+    bl_label = "Chisel"
+    bl_options = {"REGISTER", "UNDO"}
+
+    width: FloatProperty(name="Width", default=0.1, min=1e-5, soft_max=10.0, subtype="DISTANCE", unit="LENGTH",
+                         description="How far the top face is inset from the outline")
+    height: FloatProperty(name="Height", default=0.1, soft_min=-10.0, soft_max=10.0, subtype="DISTANCE",
+                          unit="LENGTH", description="How far the inset face is raised. Negative sinks it")
+    join: EnumProperty(name="Joins", items=JOINS, default="MITER")
+    miter_limit: FloatProperty(name="Miter Limit", default=4.0, min=1.0, max=100.0)
+    profile: EnumProperty(name="Profile", items=[
+        ("LINEAR", "Linear", "Straight chamfer from the outline to the raised face"),
+        ("CONVEX", "Convex", "Quarter-round bulge"),
+        ("CONCAVE", "Concave", "Cove scooped into the edge"),
+    ], default="LINEAR")
+    divisions: IntProperty(name="Divisions", default=1, min=1, max=16,
+                           description="Slices through the bevel. Use more with Convex or Concave")
+    keep_original: BoolProperty(name="Keep Original", default=True)
+    precision: FloatProperty(name="Precision", default=5e-4, min=1e-5, max=2e-2, precision=5, step=0.001,
+                             description="Approximation accuracy relative to the size of the shape")
+
+    @classmethod
+    def poll(cls, context):
+        return _poll_curves(context) and context.mode in {"OBJECT", "EDIT_CURVE"}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.prop(self, "width")
+        layout.prop(self, "height")
+        layout.prop(self, "profile")
+        layout.prop(self, "divisions")
+        layout.prop(self, "join")
+        if self.join == "MITER":
+            layout.prop(self, "miter_limit")
+        layout.prop(self, "keep_original")
+        layout.prop(self, "precision")
+
+    def execute(self, context):
+        prev = bridge.ensure_object_mode(context)
+        made = []
+        sources = []
+        for obj in _targets(context):
+            paths, z, planar = bridge.read_paths(obj)
+            if not any(p.closed and len(p.nodes) >= 3 for p in paths):
+                self.report({"WARNING"}, "%s has no closed shape to chisel" % obj.name)
+                continue
+            tol = bridge.tolerance(paths, self.precision)
+            mesh = chisel_mesh(paths, self.width, self.height, tol, self.join, self.miter_limit,
+                               self.divisions, self.profile)
+            if mesh is None:
+                self.report({"WARNING"}, "%s: the inset collapsed the shape" % obj.name)
+                continue
+            if not planar:
+                self.report({"WARNING"}, "%s is not flat; it was projected onto its local XY plane" % obj.name)
+            made.append(_add_chisel_mesh(context, obj, mesh[0], mesh[1], z))
+            sources.append(obj)
+        if sources and not self.keep_original:
+            bridge.remove_objects(sources)
+        bridge.restore_mode(prev)
+        if not made:
+            return {"CANCELLED"}
+        _select_results(context, made)
+        return {"FINISHED"}
+
+
+def _add_chisel_mesh(context, src, verts, faces, z):
+    mesh = bpy.data.meshes.new("%s.Chisel" % src.name)
+    mesh.from_pydata([(v[0], v[1], v[2] + z) for v in verts], [], [list(f) for f in faces])
+    mesh.update()
+    if hasattr(mesh.polygons, "foreach_set"):
+        try:
+            mesh.polygons.foreach_set("use_smooth", [True] * len(mesh.polygons))
+        except Exception:
+            pass
+    for mat in src.data.materials:
+        if mat is not None:
+            mesh.materials.append(mat)
+    obj = bpy.data.objects.new("%s.Chisel" % src.name, mesh)
+    obj.matrix_world = src.matrix_world.copy()
+    for coll in src.users_collection or (context.collection,):
+        coll.objects.link(obj)
+    return obj
+
+
 classes = (
     CURVE_OT_illu_offset,
     CURVE_OT_illu_outline_stroke,
@@ -376,4 +465,5 @@ classes = (
     CURVE_OT_illu_simplify,
     CURVE_OT_illu_resample,
     CURVE_OT_illu_remove_doubles,
+    CURVE_OT_illu_chisel,
 )
