@@ -125,6 +125,8 @@ def fit_cubic(pts, t1, t2, error):
     stack = [(0, len(pts) - 1, t1, t2)]
     while stack:
         first, last, th1, th2 = stack.pop()
+        if last <= first:
+            continue
         if last - first == 1:
             d = bz.dist(pts[first], pts[last]) / 3.0
             p0, p3 = pts[first], pts[last]
@@ -136,21 +138,22 @@ def fit_cubic(pts, t1, t2, error):
         if maxe < error:
             out.append(seg)
             continue
-        best = (maxe, split, seg)
-        for _ in range(20):
-            u = _reparam(pts, first, last, u, seg)
-            seg = _generate(pts, first, last, u, th1, th2)
-            maxe, split = _max_error(pts, first, last, seg, u)
-            if maxe < best[0] * 0.999:
-                best = (maxe, split, seg)
-            elif maxe >= best[0]:
-                break
+        if maxe <= 100.0 * error:
+            best = (maxe, split, seg)
+            for _ in range(20):
+                u = _reparam(pts, first, last, u, seg)
+                seg = _generate(pts, first, last, u, th1, th2)
+                maxe, split = _max_error(pts, first, last, seg, u)
+                if maxe < best[0] * 0.999:
+                    best = (maxe, split, seg)
+                elif maxe >= best[0]:
+                    break
+                if maxe < error:
+                    break
+            maxe, split, seg = best
             if maxe < error:
-                break
-        maxe, split, seg = best
-        if maxe < error:
-            out.append(seg)
-            continue
+                out.append(seg)
+                continue
         if maxe > 4.0 * error:
             # far from fitting: a balanced split recovers better than the worst-point split
             half = 0.5 * u[-1]

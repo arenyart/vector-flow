@@ -20,12 +20,12 @@ All operators support Blender's *Adjust Last Operation* panel, so you can drag t
 
 Requires Blender **4.2 or newer** (tested on 4.5 LTS).
 
-1. Download the prebuilt [`releases/illustrator_curves-1.2.1.zip`](releases/illustrator_curves-1.2.1.zip), or build it yourself:
+1. Download the prebuilt [`releases/illustrator_curves-1.2.2.zip`](releases/illustrator_curves-1.2.2.zip), or build it yourself:
    ```bash
    blender --command extension build --source-dir illustrator_curves --output-dir dist
    ```
    You can also zip the `illustrator_curves/` folder yourself.
-2. In Blender, go to *Edit › Preferences › Get Extensions*, open the ▾ menu, choose **Install from Disk…** and pick `dist/illustrator_curves-1.2.1.zip`.
+2. In Blender, go to *Edit › Preferences › Get Extensions*, open the ▾ menu, choose **Install from Disk…** and pick `dist/illustrator_curves-1.2.2.zip`.
 
 For development, symlink the package into your extensions folder so edits are picked up on restart:
 

@@ -17,81 +17,161 @@ from bisect import bisect_right
 def _vertex_pool(snap):
     cells = {}
     coords = []
+    inv = 1.0 / snap
+    snap2 = snap * snap
 
     def vid(x, y):
-        cx = math.floor(x / snap)
-        cy = math.floor(y / snap)
+        ix = math.floor(x * inv)
+        iy = math.floor(y * inv)
         best = -1
-        bestd = snap * snap
-        for i in (cx - 1, cx, cx + 1):
-            for j in (cy - 1, cy, cy + 1):
-                for k in cells.get((i, j), ()):
-                    vx, vy = coords[k]
-                    d = (vx - x) ** 2 + (vy - y) ** 2
-                    if d <= bestd:
-                        bestd = d
-                        best = k
+        bestd = snap2
+        for k in cells.get((ix, iy), ()):
+            vx, vy = coords[k]
+            d = (vx - x) * (vx - x) + (vy - y) * (vy - y)
+            if d <= bestd:
+                bestd = d
+                best = k
+        if bestd != 0.0:
+            for di in (-1, 0, 1):
+                for dj in (-1, 0, 1):
+                    if di == 0 and dj == 0:
+                        continue
+                    for k in cells.get((ix + di, iy + dj), ()):
+                        vx, vy = coords[k]
+                        d = (vx - x) * (vx - x) + (vy - y) * (vy - y)
+                        if d <= bestd:
+                            bestd = d
+                            best = k
         if best >= 0:
             return best
         coords.append((x, y))
-        cells.setdefault((cx, cy), []).append(len(coords) - 1)
+        cells.setdefault((ix, iy), []).append(len(coords) - 1)
         return len(coords) - 1
 
     return vid, coords
+
+
+def _record_pair(edges, i, j, eps, splits):
+    """Split ``edges[i]`` and ``edges[j]`` where they cross or touch interiors."""
+    ax, ay, bx, by = edges[i][:4]
+    rx, ry = bx - ax, by - ay
+    rr = rx * rx + ry * ry
+    if rr == 0.0:
+        return
+    lr = math.sqrt(rr)
+    et = eps / lr
+    cx, cy, dx, dy = edges[j][:4]
+    sx, sy = dx - cx, dy - cy
+    ss = sx * sx + sy * sy
+    if ss == 0.0:
+        return
+    ls = math.sqrt(ss)
+    eu = eps / ls
+    for px, py in ((cx, cy), (dx, dy)):
+        t = ((px - ax) * rx + (py - ay) * ry) / rr
+        if et < t < 1.0 - et and abs((px - ax) * ry - (py - ay) * rx) <= eps * lr:
+            splits[i].append((t, (px, py)))
+    for px, py in ((ax, ay), (bx, by)):
+        u = ((px - cx) * sx + (py - cy) * sy) / ss
+        if eu < u < 1.0 - eu and abs((px - cx) * sy - (py - cy) * sx) <= eps * ls:
+            splits[j].append((u, (px, py)))
+    den = rx * sy - ry * sx
+    if abs(den) <= 1e-12 * lr * ls:
+        return
+    qx, qy = cx - ax, cy - ay
+    t = (qx * sy - qy * sx) / den
+    u = (qx * ry - qy * rx) / den
+    if et < t < 1.0 - et and eu < u < 1.0 - eu:
+        p = (ax + rx * t, ay + ry * t)
+        splits[i].append((t, p))
+        splits[j].append((u, p))
+
+
+def _pairs_in_grid(edges, eps):
+    """Pairs of edges whose bounds come within ``eps``, each pair once."""
+    n = len(edges)
+    minx = [0.0] * n
+    maxx = [0.0] * n
+    miny = [0.0] * n
+    maxy = [0.0] * n
+    x0 = y0 = math.inf
+    x1 = y1 = -math.inf
+    for i, e in enumerate(edges):
+        ax, bx = e[0], e[2]
+        ay, by = e[1], e[3]
+        lo_x = ax if ax < bx else bx
+        hi_x = bx if ax < bx else ax
+        lo_y = ay if ay < by else by
+        hi_y = by if ay < by else ay
+        minx[i], maxx[i], miny[i], maxy[i] = lo_x, hi_x, lo_y, hi_y
+        if lo_x < x0:
+            x0 = lo_x
+        if hi_x > x1:
+            x1 = hi_x
+        if lo_y < y0:
+            y0 = lo_y
+        if hi_y > y1:
+            y1 = hi_y
+    span = max(x1 - x0, y1 - y0, eps)
+    cell = max(span / max(1, min(256, int(math.sqrt(n)))), eps * 8.0)
+    inv = 1.0 / cell
+    ox = x0 - eps
+    oy = y0 - eps
+    buckets = {}
+    for i in range(n):
+        ix0 = math.floor((minx[i] - eps - ox) * inv)
+        ix1 = math.floor((maxx[i] + eps - ox) * inv)
+        iy0 = math.floor((miny[i] - eps - oy) * inv)
+        iy1 = math.floor((maxy[i] + eps - oy) * inv)
+        for ix in range(ix0, ix1 + 1):
+            for iy in range(iy0, iy1 + 1):
+                buckets.setdefault((ix, iy), []).append(i)
+    last = [0] * n
+    for ids in buckets.values():
+        m = len(ids)
+        for a in range(m):
+            ia = ids[a]
+            ax0, ax1, ay0, ay1 = minx[ia], maxx[ia], miny[ia], maxy[ia]
+            for b in range(a + 1, m):
+                ib = ids[b]
+                lo, hi = (ia, ib) if ia < ib else (ib, ia)
+                if last[hi] == lo + 1:
+                    continue
+                last[hi] = lo + 1
+                if minx[ib] > ax1 + eps or ax0 > maxx[ib] + eps or miny[ib] > ay1 + eps or ay0 > maxy[ib] + eps:
+                    continue
+                yield lo, hi
 
 
 def _find_splits(edges, eps):
     """For each edge, a list of (t, point) interior split locations."""
     splits = [[] for _ in edges]
     n = len(edges)
-    minx = [min(e[0], e[2]) for e in edges]
-    maxx = [max(e[0], e[2]) for e in edges]
-    miny = [min(e[1], e[3]) for e in edges]
-    maxy = [max(e[1], e[3]) for e in edges]
+    if n < 2:
+        return splits
+    # A sweep prunes pairs whose x-ranges miss. It is faster here than a grid
+    # because the pair test dominates and most surviving pairs really do meet.
+    minx = [0.0] * n
+    maxx = [0.0] * n
+    miny = [0.0] * n
+    maxy = [0.0] * n
+    for i, e in enumerate(edges):
+        ax, bx = e[0], e[2]
+        ay, by = e[1], e[3]
+        minx[i], maxx[i] = (ax, bx) if ax < bx else (bx, ax)
+        miny[i], maxy[i] = (ay, by) if ay < by else (by, ay)
     order = sorted(range(n), key=minx.__getitem__)
     sorted_minx = [minx[i] for i in order]
-
     for oi in range(n):
         i = order[oi]
-        ax, ay, bx, by = edges[i][:4]
-        rx, ry = bx - ax, by - ay
-        rr = rx * rx + ry * ry
-        lr = math.sqrt(rr)
-        et = eps / lr
-        hi = bisect_right(sorted_minx, maxx[i] + eps)
+        limit = maxx[i] + eps
+        hi = bisect_right(sorted_minx, limit)
+        ay0, ay1 = miny[i] - eps, maxy[i] + eps
         for oj in range(oi + 1, hi):
             j = order[oj]
-            if miny[j] > maxy[i] + eps or maxy[j] < miny[i] - eps:
+            if miny[j] > ay1 or maxy[j] < ay0:
                 continue
-            cx, cy, dx, dy = edges[j][:4]
-            sx, sy = dx - cx, dy - cy
-            ss = sx * sx + sy * sy
-            ls = math.sqrt(ss)
-            eu = eps / ls
-
-            # endpoints of j touching the interior of i
-            for px, py in ((cx, cy), (dx, dy)):
-                t = ((px - ax) * rx + (py - ay) * ry) / rr
-                if et < t < 1.0 - et:
-                    if abs((px - ax) * ry - (py - ay) * rx) / lr <= eps:
-                        splits[i].append((t, (px, py)))
-            # endpoints of i touching the interior of j
-            for px, py in ((ax, ay), (bx, by)):
-                u = ((px - cx) * sx + (py - cy) * sy) / ss
-                if eu < u < 1.0 - eu:
-                    if abs((px - cx) * sy - (py - cy) * sx) / ls <= eps:
-                        splits[j].append((u, (px, py)))
-
-            den = rx * sy - ry * sx
-            if abs(den) <= 1e-12 * lr * ls:
-                continue
-            qx, qy = cx - ax, cy - ay
-            t = (qx * sy - qy * sx) / den
-            u = (qx * ry - qy * rx) / den
-            if et < t < 1.0 - et and eu < u < 1.0 - eu:
-                p = (ax + rx * t, ay + ry * t)
-                splits[i].append((t, p))
-                splits[j].append((u, p))
+            _record_pair(edges, i, j, eps, splits)
     return splits
 
 

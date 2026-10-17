@@ -11,7 +11,7 @@ from illustrator_curves.geom import shapes  # noqa: E402
 from illustrator_curves.geom.boolean import boolean  # noqa: E402
 from illustrator_curves.geom.fillet import fillet_path, corner_angles  # noqa: E402
 from illustrator_curves.geom.fit import fit_polyline, simplify_path  # noqa: E402
-from illustrator_curves.geom.offset import offset_paths, outline_paths  # noqa: E402
+from illustrator_curves.geom.offset import _offset_via_overlay, offset_paths, outline_paths  # noqa: E402
 from illustrator_curves.geom.path import Path, paths_bounds, transform_paths, world_plane_map  # noqa: E402
 from illustrator_curves.geom.pen import PenState, constrain_45  # noqa: E402
 from illustrator_curves.geom.resample import resample_path  # noqa: E402
@@ -147,6 +147,27 @@ class TestOffset:
         assert total_area(res) == pytest.approx(math.pi * 1.25 ** 2, rel=2e-3)
         res = offset_paths([circle(0, 0, 1)], -0.25, "ROUND", tol=1e-4)
         assert total_area(res) == pytest.approx(math.pi * 0.75 ** 2, rel=2e-3)
+
+    def test_concave_offset_matches_robust_union(self):
+        ell = Path.from_polyline([(0, 0), (3, 0), (3, 1), (1, 1), (1, 3), (0, 3)], closed=True)
+        narrow = Path.from_polyline(
+            [(0, 0), (0, 2), (0.4, 2), (0.4, 0.4), (1.2, 0.4), (1.2, 2), (1.6, 2), (1.6, 0)], closed=True)
+        cases = (
+            (ell, 0.2, "MITER"),
+            (ell, 0.2, "ROUND"),
+            (ell, -0.15, "BEVEL"),
+            (narrow, 0.5, "MITER"),  # arms merge; the parallel curve is not valid
+        )
+        for shape, dist, join in cases:
+            fast = offset_paths([shape], dist, join, tol=1e-4)
+            slow = _offset_via_overlay([shape], dist, join, 4.0, 1e-4, True, 1e-4, math.radians(30))
+            assert total_area(fast) == pytest.approx(total_area(slow), rel=2e-3, abs=1e-3)
+
+    def test_open_offset_matches_robust_union(self):
+        wave = Path.from_polyline([(i * 0.05, math.sin(i * 0.25)) for i in range(48)], closed=False)
+        fast = offset_paths([wave], 0.08, "ROUND", tol=1e-3)
+        slow = _offset_via_overlay([wave], 0.08, "ROUND", 4.0, 1e-3, True, 1e-3, math.radians(30))
+        assert total_area(fast) == pytest.approx(total_area(slow), rel=2e-3, abs=1e-3)
 
     def test_outline_open_line(self):
         p = Path.from_polyline([(0, 0), (4, 0)], closed=False)
