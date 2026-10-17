@@ -3,7 +3,7 @@
 import bpy
 from mathutils import Matrix, Vector
 
-from .geom.path import Node, Path, assign_handle_types, paths_diagonal
+from .geom.path import Node, Path, assign_handle_types, paths_diagonal, world_plane_map
 
 
 def is_curve(obj):
@@ -128,16 +128,43 @@ def new_curve_data(name):
 
 
 def new_object_like(context, src, name):
-    """New curve object sharing ``src``'s transform, settings, materials and collections."""
+    """New curve object sharing ``src``'s transform, settings, materials and collections.
+
+    Location, rotation and scale are copied as channels (not via ``matrix_world``)
+    so a scale other than 1 — including a negative scale or a parent — is the same
+    on the result as on the source. Decomposing ``matrix_world`` can flip signs and
+    drops shear from a non-uniform parent.
+    """
     data = src.data.copy()
     data.splines.clear()
     data.name = name
     obj = bpy.data.objects.new(name, data)
-    obj.matrix_world = src.matrix_world.copy()
     colls = src.users_collection or (context.collection,)
     for c in colls:
         c.objects.link(obj)
+    obj.parent = src.parent
+    obj.parent_type = src.parent_type
+    obj.parent_bone = src.parent_bone
+    obj.matrix_parent_inverse = src.matrix_parent_inverse.copy()
+    obj.rotation_mode = src.rotation_mode
+    obj.location = src.location
+    obj.scale = src.scale
+    obj.rotation_euler = src.rotation_euler
+    obj.rotation_quaternion = src.rotation_quaternion
+    obj.rotation_axis_angle = src.rotation_axis_angle
+    obj.delta_location = src.delta_location
+    obj.delta_rotation_euler = src.delta_rotation_euler
+    obj.delta_rotation_quaternion = src.delta_rotation_quaternion
+    obj.delta_scale = src.delta_scale
     return obj
+
+
+def object_plane_maps(obj):
+    """Local-XY ↔ world-unit maps for ``obj``'s plane. ``None`` if a scale axis is zero."""
+    linear = obj.matrix_world.to_3x3()
+    x = linear @ Vector((1.0, 0.0, 0.0))
+    y = linear @ Vector((0.0, 1.0, 0.0))
+    return world_plane_map((x.x, x.y, x.z), (y.x, y.y, y.z))
 
 
 def remove_objects(objs):

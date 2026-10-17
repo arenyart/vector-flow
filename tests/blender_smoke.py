@@ -188,6 +188,124 @@ def run():
     check("exclude with touching islands filled by Blender", abs(mesh_area(res) - area(res)) < 2e-3,
           "mesh %.4f vs path %.4f" % (mesh_area(res), area(res)))
 
+    def world_size(obj):
+        bmin = [math.inf, math.inf, math.inf]
+        bmax = [-math.inf, -math.inf, -math.inf]
+        dg = bpy.context.evaluated_depsgraph_get()
+        ev = obj.evaluated_get(dg)
+        me = ev.to_mesh()
+        mw = ev.matrix_world
+        for v in me.vertices:
+            p = mw @ v.co
+            for i in range(3):
+                bmin[i] = min(bmin[i], p[i])
+                bmax[i] = max(bmax[i], p[i])
+        ev.to_mesh_clear()
+        return tuple(bmax[i] - bmin[i] for i in range(3))
+
+    bpy.ops.curve.illu_add_rectangle(width=2, height=1, location=(0, -8, 0))
+    scaled = bpy.context.active_object
+    scaled.scale = (4, 0.5, 1)
+    select_only(scaled)
+    bpy.ops.curve.illu_outline_stroke(width=0.2, join="MITER", cap="BUTT", keep_original=True)
+    ol = bpy.context.active_object
+    sx, sy, sz = world_size(ol)
+    check("outline of a scaled curve stays the visual size",
+          ol is not scaled and abs(sx - 8.2) < 0.03 and abs(sy - 0.7) < 0.03
+          and abs(ol.scale.x - 4) < 1e-5 and abs(ol.scale.y - 0.5) < 1e-5,
+          "size (%.4f %.4f %.4f) scale %s" % (sx, sy, sz, tuple(ol.scale)))
+
+    bpy.ops.curve.illu_add_rectangle(width=2, height=2, location=(0, -12, 0))
+    unit = bpy.context.active_object
+    select_only(unit)
+    bpy.ops.curve.illu_outline_stroke(width=0.2, join="MITER", cap="BUTT")
+    ol1 = bpy.context.active_object
+    sx, sy, _ = world_size(ol1)
+    check("outline at scale 1", abs(sx - 2.2) < 0.03 and abs(sy - 2.2) < 0.03, "(%.4f %.4f)" % (sx, sy))
+
+    bpy.ops.curve.illu_add_rectangle(width=2, height=1, location=(0, -16, 0))
+    bv = bpy.context.active_object
+    bv.scale = (3, 3, 3)
+    bv.data.bevel_depth = 0.05
+    bv.data.extrude = 0.02
+    bv.data.dimensions = "3D"
+    select_only(bv)
+    bpy.ops.curve.illu_outline_stroke(width=0.2, join="MITER", keep_original=True)
+    olb = bpy.context.active_object
+    sx, sy, sz = world_size(olb)
+    check("scaled outline is not thickened by the copied bevel",
+          olb.data.bevel_depth == 0 and olb.data.extrude == 0
+          and abs(sx - 6.2) < 0.04 and abs(sy - 3.2) < 0.04 and sz < 0.02,
+          "size (%.4f %.4f %.4f) bevel %s extrude %s" % (sx, sy, sz, olb.data.bevel_depth, olb.data.extrude))
+
+    bpy.ops.curve.illu_add_rectangle(width=2, height=1, location=(0, -20, 0))
+    neg = bpy.context.active_object
+    neg.scale = (-2, 1.5, 1)
+    select_only(neg)
+    bpy.ops.curve.illu_outline_stroke(width=0.2, join="MITER", cap="BUTT")
+    oln = bpy.context.active_object
+    sx, sy, _ = world_size(oln)
+    check("negative scale keeps the outline the same size",
+          abs(sx - 4.2) < 0.04 and abs(sy - 1.7) < 0.04
+          and abs(oln.scale.x - (-2)) < 1e-5 and abs(oln.scale.y - 1.5) < 1e-5 and abs(oln.scale.z - 1) < 1e-5,
+          "size (%.4f %.4f) scale %s" % (sx, sy, tuple(oln.scale)))
+
+    bpy.ops.curve.illu_add_rectangle(width=2, height=2, location=(0, -24, 0))
+    ofs = bpy.context.active_object
+    ofs.scale = (2, 2, 2)
+    select_only(ofs)
+    bpy.ops.curve.illu_offset(distance=0.1, join="MITER")
+    ofo = bpy.context.active_object
+    sx, sy, _ = world_size(ofo)
+    check("offset distance is in world units", abs(sx - 4.2) < 0.04 and abs(sy - 4.2) < 0.04, "(%.4f %.4f)" % (sx, sy))
+
+    def plane_bounds(obj):
+        maps = bridge.object_plane_maps(obj)
+        ev = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        me = ev.to_mesh()
+        a, b, c, d = maps[0]
+        xs, ys = [], []
+        for v in me.vertices:
+            x, y = v.co.x, v.co.y
+            xs.append(a * x + b * y)
+            ys.append(c * x + d * y)
+        ev.to_mesh_clear()
+        return min(xs), min(ys), max(xs), max(ys)
+
+    bpy.ops.curve.illu_add_rectangle(width=2, height=2, location=(0, 0, 0))
+    turned = bpy.context.active_object
+    turned.scale = (4, 0.5, 1)
+    turned.rotation_euler = (0, 0, 0.7)
+    select_only(turned)
+    bpy.ops.curve.illu_outline_stroke(width=0.2, join="MITER", cap="BUTT")
+    olt = bpy.context.active_object
+    sb = plane_bounds(turned)
+    ob = plane_bounds(olt)
+    check("rotated non-uniform outline uses a uniform world width",
+          abs(olt.scale.x - 4) < 1e-5 and abs(olt.rotation_euler.z - 0.7) < 1e-5
+          and abs((ob[0] - sb[0]) + 0.1) < 0.03 and abs((ob[2] - sb[2]) - 0.1) < 0.03
+          and abs((ob[1] - sb[1]) + 0.1) < 0.03 and abs((ob[3] - sb[3]) - 0.1) < 0.03,
+          "src %s out %s scale %s" % (tuple(round(v, 4) for v in sb), tuple(round(v, 4) for v in ob), tuple(olt.scale)))
+
+    parent = bpy.data.objects.new("ScaleParent", None)
+    bpy.context.collection.objects.link(parent)
+    parent.scale = (3, 0.5, 1)
+    bpy.ops.curve.illu_add_rectangle(width=2, height=2, location=(0, 0, 0))
+    child = bpy.context.active_object
+    child.parent = parent
+    child.location = (1, 2, 0)
+    select_only(child)
+    bpy.ops.curve.illu_outline_stroke(width=0.2, join="MITER", cap="BUTT")
+    olc = bpy.context.active_object
+    sb = plane_bounds(child)
+    ob = plane_bounds(olc)
+    check("parented outline keeps the parent and the world width",
+          olc.parent == parent and abs(olc.scale.x - 1) < 1e-5 and abs(olc.location.x - 1) < 1e-5
+          and abs((ob[0] - sb[0]) + 0.1) < 0.03 and abs((ob[2] - sb[2]) - 0.1) < 0.03
+          and abs((ob[1] - sb[1]) + 0.1) < 0.03 and abs((ob[3] - sb[3]) - 0.1) < 0.03,
+          "parent %s scale %s src %s out %s" % (olc.parent, tuple(olc.scale),
+                                                tuple(round(v, 4) for v in sb), tuple(round(v, 4) for v in ob)))
+
     check("pen tool registered", hasattr(bpy.types, "CURVE_OT_illu_pen") or "curve.illu_pen" in dir(bpy.ops.curve))
     illustrator_curves.unregister()
     check("unregister clean", not hasattr(bpy.types.Scene, "illu_settings"))

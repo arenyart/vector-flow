@@ -12,7 +12,7 @@ from illustrator_curves.geom.boolean import boolean  # noqa: E402
 from illustrator_curves.geom.fillet import fillet_path, corner_angles  # noqa: E402
 from illustrator_curves.geom.fit import fit_polyline, simplify_path  # noqa: E402
 from illustrator_curves.geom.offset import offset_paths, outline_paths  # noqa: E402
-from illustrator_curves.geom.path import Path  # noqa: E402
+from illustrator_curves.geom.path import Path, paths_bounds, transform_paths, world_plane_map  # noqa: E402
 from illustrator_curves.geom.pen import PenState, constrain_45  # noqa: E402
 from illustrator_curves.geom.resample import resample_path  # noqa: E402
 from illustrator_curves.geom.cleanup import remove_doubles  # noqa: E402
@@ -323,6 +323,37 @@ class TestPen:
         assert constrain_45((0, 0), (1, 0.1))[1] == pytest.approx(0, abs=1e-12)
         x, y = constrain_45((0, 0), (1, 0.9))
         assert x == pytest.approx(y)
+
+
+class TestWorldPlaneScale:
+    def test_map_roundtrip_and_orientation(self):
+        maps = world_plane_map((4.0, 0.0, 0.0), (1.0, 0.5, 0.0))
+        assert maps is not None
+        fwd, inv = maps
+        back = transform_paths(transform_paths([square(0, 0, 2)], fwd), inv)
+        b = paths_bounds(back)
+        assert b == pytest.approx((0, 0, 2, 2), abs=1e-9)
+        a, b_, c, d = fwd
+        assert a * d - b_ * c > 0
+
+    def test_negative_scale_keeps_size(self):
+        maps = world_plane_map((-2.0, 0.0, 0.0), (0.0, 1.5, 0.0))
+        fwd, _ = maps
+        rect = Path.from_polyline([(-1, -0.5), (1, -0.5), (1, 0.5), (-1, 0.5)], closed=True)
+        b = paths_bounds(transform_paths([rect], fwd))
+        # local 2×1 rectangle, world size 4×1.5
+        assert (b[2] - b[0], b[3] - b[1]) == pytest.approx((4.0, 1.5), abs=1e-9)
+
+    def test_degenerate_axis(self):
+        assert world_plane_map((0.0, 0.0, 0.0), (0.0, 1.0, 0.0)) is None
+
+    def test_outline_width_is_uniform_in_world_units(self):
+        # local square from -1..1, scale (4, 0.5) → world 8×1, then a 0.2 stroke
+        local = Path.from_polyline([(-1, -1), (1, -1), (1, 1), (-1, 1)], closed=True)
+        fwd, inv = world_plane_map((4.0, 0.0, 0.0), (0.0, 0.5, 0.0))
+        outlined = outline_paths(transform_paths([local], fwd), 0.2, "MITER", tol=1e-5)
+        world = paths_bounds(outlined)
+        assert (world[0], world[1], world[2], world[3]) == pytest.approx((-4.1, -0.6, 4.1, 0.6), abs=2e-3)
 
 
 class TestShapes:

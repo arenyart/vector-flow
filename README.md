@@ -20,12 +20,12 @@ All operators support Blender's *Adjust Last Operation* panel, so you can drag t
 
 Requires Blender **4.2 or newer** (tested on 4.5 LTS).
 
-1. Download the prebuilt [`releases/illustrator_curves-1.2.0.zip`](releases/illustrator_curves-1.2.0.zip), or build it yourself:
+1. Download the prebuilt [`releases/illustrator_curves-1.2.1.zip`](releases/illustrator_curves-1.2.1.zip), or build it yourself:
    ```bash
    blender --command extension build --source-dir illustrator_curves --output-dir dist
    ```
    You can also zip the `illustrator_curves/` folder yourself.
-2. In Blender, go to *Edit › Preferences › Get Extensions*, open the ▾ menu, choose **Install from Disk…** and pick `dist/illustrator_curves-1.2.0.zip`.
+2. In Blender, go to *Edit › Preferences › Get Extensions*, open the ▾ menu, choose **Install from Disk…** and pick `dist/illustrator_curves-1.2.1.zip`.
 
 For development, symlink the package into your extensions folder so edits are picked up on restart:
 
@@ -59,8 +59,8 @@ The result keeps the original Bezier segments. Booleans cut the source curves at
 
 ### Offset, Outline, Corners, Simplify
 
-- **Offset Path** adds a new object by default (*Keep Original*). Positive distances grow the shape and negative ones shrink it. Open paths are outlined when growing.
-- **Outline Stroke** converts open or closed paths to filled outlines. Self-intersecting strokes are merged cleanly.
+- **Offset Path** adds a new object by default (*Keep Original*). Positive distances grow the shape and negative ones shrink it. Open paths are outlined when growing. The distance is in scene units on the curve as it appears, so an object scale other than 1 does not change the result's size.
+- **Outline Stroke** converts open or closed paths to filled outlines. Self-intersecting strokes are merged cleanly. The width is in scene units on the curve as it appears: a scaled, rotated or parented curve keeps that size, and the new object keeps the same scale. A bevel or extrude on the source is not copied onto the outline, so it is not thickened a second time.
 - **Round Corners** detects corners by the angle between handle tangents, so smooth points are left alone. Radii are clamped so neighbouring fillets never overlap.
 - **Simplify Path** also converts poly splines (for example, from Grease Pencil or the Draw tool) into clean Bezier curves.
 - **Resample Path** spaces points evenly by arc length. *Count* sets how many points each path gets; *Length* targets a distance between them. *Smooth* fits a curve through the new points, and turning it off leaves straight segments. Sharp corners stay put.

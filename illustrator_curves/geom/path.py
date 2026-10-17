@@ -149,6 +149,50 @@ def paths_diagonal(paths):
     return math.hypot(b[2] - b[0], b[3] - b[1])
 
 
+def _vec3(v):
+    if len(v) >= 3:
+        return (float(v[0]), float(v[1]), float(v[2]))
+    return (float(v[0]), float(v[1]), 0.0)
+
+
+def world_plane_map(x_axis, y_axis, eps=1e-12):
+    """Map local XY into an orthonormal frame of the curve's plane, in world units.
+
+    ``x_axis`` and ``y_axis`` are the world-space images of local ``(1, 0)`` and
+    ``(0, 1)`` (object scale, rotation and parents included). Returns
+    ``(forward, inverse)`` 2×2 maps ``(a, b, c, d)`` — ``(x, y) → (a·x + b·y, c·x + d·y)`` —
+    with positive determinant so fill winding is unchanged. ``None`` when the
+    plane is degenerate (a zero scale axis).
+    """
+    xx, xy, xz = _vec3(x_axis)
+    yx, yy, yz = _vec3(y_axis)
+    lx = math.sqrt(xx * xx + xy * xy + xz * xz)
+    if lx < eps:
+        return None
+    ux, uy, uz = xx / lx, xy / lx, xz / lx
+    proj = yx * ux + yy * uy + yz * uz
+    px, py, pz = yx - ux * proj, yy - uy * proj, yz - uz * proj
+    ly = math.sqrt(px * px + py * py + pz * pz)
+    if ly < eps:
+        return None
+    forward = (lx, proj, 0.0, ly)
+    det = lx * ly
+    inverse = (ly / det, -proj / det, 0.0, lx / det)
+    return forward, inverse
+
+
+def transform_paths(paths, m):
+    """Apply a 2×2 map ``(a, b, c, d)`` to every point and handle."""
+    if m is None:
+        return paths
+    a, b, c, d = m
+
+    def fn(p):
+        return (a * p[0] + b * p[1], c * p[0] + d * p[1])
+
+    return [p.transformed(fn) for p in paths]
+
+
 def separate_touching(paths, eps):
     """Pull apart vertices shared by several loops (or twice by one loop).
 

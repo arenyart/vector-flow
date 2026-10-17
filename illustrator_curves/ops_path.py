@@ -7,6 +7,7 @@ from . import bridge
 from .geom.fillet import fillet_path
 from .geom.fit import simplify_path
 from .geom.offset import offset_paths, outline_paths
+from .geom.path import transform_paths
 from .geom.resample import resample_path
 from .geom.cleanup import remove_doubles
 
@@ -49,6 +50,41 @@ def _mark_modified(paths):
     return paths
 
 
+def _to_world_lengths(obj, paths):
+    """Express paths in world units on the object's plane.
+
+    Operators measure distances in scene units. Working in local space would
+    multiply those distances by the object's scale, so a scaled curve's result
+    is a different size from the curve on screen. Returns ``(paths, inverse)``.
+    """
+    maps = bridge.object_plane_maps(obj)
+    if maps is None:
+        return paths, None
+    forward, inverse = maps
+    return transform_paths(paths, forward), inverse
+
+
+def _mean_plane_scale(obj):
+    """Average world length of the object's local X and Y axes."""
+    maps = bridge.object_plane_maps(obj)
+    if maps is None:
+        return 1.0
+    a, b, c, d = maps[0]
+    return 0.5 * (math.hypot(a, c) + math.hypot(b, d))
+
+
+def _as_flat_fill(curve):
+    """The outline geometry is the stroke, so bevel and extrude must not thicken it again."""
+    curve.dimensions = "2D"
+    if curve.fill_mode not in {"BOTH", "FRONT", "BACK"}:
+        curve.fill_mode = "BOTH"
+    curve.bevel_depth = 0.0
+    curve.extrude = 0.0
+    curve.offset = 0.0
+    curve.bevel_object = None
+    curve.taper_object = None
+
+
 class _ResultMixin:
     keep_original: BoolProperty(name="Keep Original", default=True,
                                 description="Add the result as a new object and keep the source")
@@ -72,7 +108,8 @@ class CURVE_OT_illu_offset(_ResultMixin, bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     distance: FloatProperty(name="Offset", default=0.1, soft_min=-10, soft_max=10, subtype="DISTANCE",
-                            unit="LENGTH", description="Positive grows the shape, negative shrinks it")
+                            unit="LENGTH",
+                            description="Distance in scene units, on the curve as it appears. Positive grows the shape, negative shrinks it")
     join: EnumProperty(name="Joins", items=JOINS, default="MITER")
     miter_limit: FloatProperty(name="Miter Limit", default=4.0, min=1.0, max=100.0)
 
@@ -97,12 +134,13 @@ class CURVE_OT_illu_offset(_ResultMixin, bpy.types.Operator):
             paths, z, _ = bridge.read_paths(obj)
             if not paths:
                 continue
+            paths, inverse = _to_world_lengths(obj, paths)
             tol = bridge.tolerance(paths, self.precision)
             res = offset_paths(paths, self.distance, self.join, self.miter_limit, tol)
             if not res:
                 self.report({"WARNING"}, "%s: offset collapsed the shape" % obj.name)
                 continue
-            made.append(self._emit(context, obj, res, z, "Offset"))
+            made.append(self._emit(context, obj, transform_paths(res, inverse), z, "Offset"))
         bridge.restore_mode(prev)
         if not made:
             return {"CANCELLED"}
@@ -117,12 +155,13 @@ class CURVE_OT_illu_outline_stroke(_ResultMixin, bpy.types.Operator):
     bl_label = "Outline Stroke"
     bl_options = {"REGISTER", "UNDO"}
 
-    width: FloatProperty(name="Width", default=0.05, min=0.0, soft_max=5.0, subtype="DISTANCE", unit="LENGTH")
+    width: FloatProperty(name="Width", default=0.05, min=0.0, soft_max=5.0, subtype="DISTANCE", unit="LENGTH",
+                         description="Stroke width in scene units, on the curve as it appears")
     join: EnumProperty(name="Joins", items=JOINS, default="ROUND")
     cap: EnumProperty(name="Caps", items=CAPS, default="BUTT")
     miter_limit: FloatProperty(name="Miter Limit", default=4.0, min=1.0, max=100.0)
     use_bevel_depth: BoolProperty(name="Use Curve Bevel", default=False,
-                                  description="Use twice the curve's bevel depth as the width when it is set")
+                                  description="Use twice the curve's bevel depth, in scene units, as the width when it is set")
 
     @classmethod
     def poll(cls, context):
@@ -149,19 +188,16 @@ class CURVE_OT_illu_outline_stroke(_ResultMixin, bpy.types.Operator):
             paths, z, _ = bridge.read_paths(obj)
             if not paths:
                 continue
+            paths, inverse = _to_world_lengths(obj, paths)
             width = self.width
             if self.use_bevel_depth and obj.data.bevel_depth > 0:
-                width = obj.data.bevel_depth * 2.0
+                width = obj.data.bevel_depth * 2.0 * _mean_plane_scale(obj)
             tol = bridge.tolerance(paths, self.precision)
             res = outline_paths(paths, width, self.join, self.cap, self.miter_limit, tol)
             if not res:
                 continue
-            out = self._emit(context, obj, res, z, "Outline")
-            if out.data.bevel_depth and (self.use_bevel_depth or not self.keep_original):
-                out.data.bevel_depth = 0.0
-            out.data.dimensions = "2D"
-            if out.data.fill_mode not in {"BOTH", "FRONT", "BACK"}:
-                out.data.fill_mode = "BOTH"
+            out = self._emit(context, obj, transform_paths(res, inverse), z, "Outline")
+            _as_flat_fill(out.data)
             made.append(out)
         bridge.restore_mode(prev)
         if not made:
