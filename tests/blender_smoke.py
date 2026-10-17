@@ -188,16 +188,6 @@ def run():
     check("exclude with touching islands filled by Blender", abs(mesh_area(res) - area(res)) < 2e-3,
           "mesh %.4f vs path %.4f" % (mesh_area(res), area(res)))
 
-    bpy.ops.curve.illu_add_rectangle(width=2, height=2, location=(40, 0, 0))
-    plaque = bpy.context.active_object
-    select_only(plaque)
-    bpy.ops.curve.illu_chisel(width=0.2, height=0.3, join="MITER", keep_original=True)
-    chisel = bpy.context.active_object
-    zs = [v.co.z for v in chisel.data.vertices]
-    check("chisel builds a raised mesh",
-          chisel.type == "MESH" and chisel is not plaque and abs(max(zs) - 0.3) < 1e-4 and len(chisel.data.polygons) > 4,
-          "type %s z %s faces %d" % (chisel.type, max(zs) if zs else None, len(chisel.data.polygons)))
-
     check("pen tool registered", hasattr(bpy.types, "CURVE_OT_illu_pen") or "curve.illu_pen" in dir(bpy.ops.curve))
     illustrator_curves.unregister()
     check("unregister clean", not hasattr(bpy.types.Scene, "illu_settings"))

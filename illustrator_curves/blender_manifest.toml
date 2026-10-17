@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "illustrator_curves"
-version = "1.3.0"
+version = "1.2.0"
 name = "Illustrator Curves"
 tagline = "Pen tool, Pathfinder, offset, outline and fillets for curves"
 maintainer = "Illustrator Curves contributors"
