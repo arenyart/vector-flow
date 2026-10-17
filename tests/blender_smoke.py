@@ -306,6 +306,54 @@ def run():
           "parent %s scale %s src %s out %s" % (olc.parent, tuple(olc.scale),
                                                 tuple(round(v, 4) for v in sb), tuple(round(v, 4) for v in ob)))
 
+    bpy.ops.curve.illu_add_rectangle(width=2, height=2, location=(40, 0, 0))
+    big = bpy.context.active_object
+    big.location.z = 0.5
+    bpy.ops.curve.illu_add_rectangle(width=1, height=1, location=(40, 0, 0))
+    mid = bpy.context.active_object
+    bpy.ops.curve.illu_add_ellipse(radius_x=0.3, radius_y=0.3, location=(40, 0, 1.5))
+    small = bpy.context.active_object
+    select_only(small, mid, big)
+    bpy.ops.curve.illu_stack_by_size(layer_height=0.25)
+    check("largest shape keeps its height", abs(big.matrix_world.translation.z - 0.5) < 1e-5,
+          "%.4f" % big.matrix_world.translation.z)
+    check("medium shape sits one layer up", abs(mid.matrix_world.translation.z - 0.75) < 1e-5,
+          "%.4f" % mid.matrix_world.translation.z)
+    check("smallest shape sits two layers up", abs(small.matrix_world.translation.z - 1.0) < 1e-5,
+          "%.4f" % small.matrix_world.translation.z)
+    check("stack keeps the shape on the ground plane",
+          abs(small.matrix_world.translation.x - 40) < 1e-4 and abs(mid.matrix_world.translation.y) < 1e-4)
+
+    bpy.ops.curve.illu_add_rectangle(width=1, height=1, location=(50, 0, 0))
+    wide = bpy.context.active_object
+    wide.scale = (3, 3, 1)
+    bpy.ops.curve.illu_add_rectangle(width=2, height=2, location=(50, 0, 0))
+    plain = bpy.context.active_object
+    select_only(plain, wide)
+    bpy.ops.curve.illu_stack_by_size(layer_height=0.2)
+    check("scaled-up shape stays below a smaller unscaled shape",
+          abs(wide.matrix_world.translation.z - 0.0) < 1e-5 and abs(plain.matrix_world.translation.z - 0.2) < 1e-5,
+          "scaled %.4f plain %.4f" % (wide.matrix_world.translation.z, plain.matrix_world.translation.z))
+
+    lift = bpy.data.objects.new("Lift", None)
+    bpy.context.collection.objects.link(lift)
+    lift.location.z = 2.0
+    bpy.ops.curve.illu_add_rectangle(width=2, height=2, location=(60, 0, 0))
+    child = bpy.context.active_object
+    child.parent = lift
+    bpy.ops.curve.illu_add_ellipse(radius_x=0.4, radius_y=0.4, location=(60, 0, 0))
+    above = bpy.context.active_object
+    select_only(above, child)
+    bpy.context.view_layer.update()
+    bpy.ops.curve.illu_stack_by_size(layer_height=0.3)
+    check("parented shape stacks in world height",
+          abs(child.matrix_world.translation.z - 2.0) < 1e-4 and abs(above.matrix_world.translation.z - 2.3) < 1e-4
+          and child.parent == lift,
+          "child %.4f above %.4f" % (child.matrix_world.translation.z, above.matrix_world.translation.z))
+
+    select_only(big)
+    check("stack needs two shapes", bpy.ops.curve.illu_stack_by_size() == {"CANCELLED"})
+
     check("pen tool registered", hasattr(bpy.types, "CURVE_OT_illu_pen") or "curve.illu_pen" in dir(bpy.ops.curve))
     illustrator_curves.unregister()
     check("unregister clean", not hasattr(bpy.types.Scene, "illu_settings"))

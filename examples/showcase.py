@@ -104,6 +104,19 @@ def build():
     bpy.ops.curve.illu_fillet(radius=0.45, mode="INVERTED")
     label("Inverted Round", 9.6, -2.6)
 
+    at(12.8, -1)
+    bpy.ops.curve.illu_add_rectangle(width=2.0, height=2.0)
+    stack_big = color(bpy.context.active_object, 0)
+    at(12.8, -1)
+    bpy.ops.curve.illu_add_rectangle(width=1.2, height=1.2)
+    stack_mid = color(bpy.context.active_object, 2)
+    at(12.8, -1)
+    bpy.ops.curve.illu_add_ellipse(radius_x=0.35, radius_y=0.35)
+    stack_small = color(bpy.context.active_object, 1)
+    only(stack_big, stack_mid, stack_small)
+    bpy.ops.curve.illu_stack_by_size(layer_height=0.18)
+    label("Stack by Size", 12.8, -2.6)
+
     for area in bpy.context.screen.areas:
         if area.type == "VIEW_3D":
             space = area.spaces.active
@@ -115,8 +128,8 @@ def build():
             r3d = space.region_3d
             r3d.view_perspective = "ORTHO"
             r3d.view_rotation = Quaternion((1, 0, 0, 0))
-            r3d.view_location = (5.6, 0.4, 0)
-            r3d.view_distance = 11
+            r3d.view_location = (6.4, 0.4, 0)
+            r3d.view_distance = 13
             for region in area.regions:
                 if region.type == "UI":
                     try:

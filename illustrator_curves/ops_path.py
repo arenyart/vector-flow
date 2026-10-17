@@ -8,6 +8,7 @@ from .geom.fillet import fillet_path
 from .geom.fit import simplify_path
 from .geom.offset import offset_paths, outline_paths
 from .geom.path import transform_paths
+from .geom.stack import footprint, stack_levels
 from .geom.resample import resample_path
 from .geom.cleanup import remove_doubles
 
@@ -62,6 +63,28 @@ def _to_world_lengths(obj, paths):
         return paths, None
     forward, inverse = maps
     return transform_paths(paths, forward), inverse
+
+
+def _world_z(obj):
+    return float(obj.matrix_world[2][3])
+
+
+def _set_world_z(obj, z):
+    """Move ``obj`` so its origin sits at world height ``z``. X and Y stay put."""
+    mw = obj.matrix_world.copy()
+    mw[2][3] = z
+    obj.matrix_world = mw
+
+
+def _footprint(obj):
+    """World-unit footprint of a curve, so a scaled-up shape counts as larger."""
+    paths, _, _ = bridge.read_paths(obj)
+    if not paths:
+        return 0.0
+    maps = bridge.object_plane_maps(obj)
+    if maps is not None:
+        paths = transform_paths(paths, maps[0])
+    return footprint(paths)
 
 
 def _mean_plane_scale(obj):
@@ -204,6 +227,43 @@ class CURVE_OT_illu_outline_stroke(_ResultMixin, bpy.types.Operator):
             self.report({"WARNING"}, "Nothing to outline")
             return {"CANCELLED"}
         _select_results(context, made)
+        return {"FINISHED"}
+
+
+class CURVE_OT_illu_stack_by_size(bpy.types.Operator):
+    """Stack selected shapes by size. The largest keeps its height and each smaller shape is placed one layer higher"""
+
+    bl_idname = "curve.illu_stack_by_size"
+    bl_label = "Stack by Size"
+    bl_options = {"REGISTER", "UNDO"}
+
+    layer_height: FloatProperty(name="Layer Height", default=0.1, min=0.0, soft_max=10.0,
+                                subtype="DISTANCE", unit="LENGTH",
+                                description="Vertical distance between sizes, in scene units. The largest shape keeps its height")
+
+    @classmethod
+    def poll(cls, context):
+        return _poll_curves(context) and context.mode == "OBJECT"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.prop(self, "layer_height")
+
+    def execute(self, context):
+        context.view_layer.update()
+        objs = _targets(context)
+        if len(objs) < 2:
+            self.report({"WARNING"}, "Select two or more shapes to stack")
+            return {"CANCELLED"}
+        sizes = [_footprint(obj) for obj in objs]
+        offsets = stack_levels(sizes, self.layer_height)
+        base_z = _world_z(objs[offsets.index(0.0)])
+        for obj, offset in zip(objs, offsets):
+            if offset == 0.0:
+                continue
+            _set_world_z(obj, base_z + offset)
+        self.report({"INFO"}, "Stacked %d shapes" % len(objs))
         return {"FINISHED"}
 
 
@@ -408,6 +468,7 @@ class CURVE_OT_illu_remove_doubles(bpy.types.Operator):
 classes = (
     CURVE_OT_illu_offset,
     CURVE_OT_illu_outline_stroke,
+    CURVE_OT_illu_stack_by_size,
     CURVE_OT_illu_fillet,
     CURVE_OT_illu_simplify,
     CURVE_OT_illu_resample,

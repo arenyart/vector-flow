@@ -16,6 +16,7 @@ from illustrator_curves.geom.path import Path, paths_bounds, transform_paths, wo
 from illustrator_curves.geom.pen import PenState, constrain_45  # noqa: E402
 from illustrator_curves.geom.resample import resample_path  # noqa: E402
 from illustrator_curves.geom.cleanup import remove_doubles  # noqa: E402
+from illustrator_curves.geom.stack import footprint, stack_levels  # noqa: E402
 from illustrator_curves.geom.path import Node  # noqa: E402
 
 
@@ -375,6 +376,32 @@ class TestWorldPlaneScale:
         outlined = outline_paths(transform_paths([local], fwd), 0.2, "MITER", tol=1e-5)
         world = paths_bounds(outlined)
         assert (world[0], world[1], world[2], world[3]) == pytest.approx((-4.1, -0.6, 4.1, 0.6), abs=2e-3)
+
+
+class TestStack:
+    def test_largest_stays_and_smaller_rise(self):
+        assert stack_levels([1, 4, 2], 0.25) == [0.5, 0.0, 0.25]
+
+    def test_ties_keep_input_order(self):
+        assert stack_levels([3, 3, 1], 0.1) == pytest.approx([0.0, 0.1, 0.2])
+
+    def test_single_and_empty(self):
+        assert stack_levels([5], 0.1) == [0.0]
+        assert stack_levels([], 0.1) == []
+
+    def test_zero_step_leaves_everyone_level(self):
+        assert stack_levels([1, 2, 3], 0.0) == [0.0, 0.0, 0.0]
+
+    def test_footprint_is_bounding_area(self):
+        assert footprint([shapes.rectangle(4, 2)]) == pytest.approx(8)
+        assert footprint([shapes.rectangle(1, 1)]) == pytest.approx(1)
+        assert footprint([shapes.ellipse(1, 1)]) == pytest.approx(4, abs=1e-6)
+        assert footprint([Path.from_polyline([(0, 0), (5, 0)], closed=False)]) == 0
+
+    def test_footprint_follows_world_scale(self):
+        fwd, _ = world_plane_map((2.0, 0.0, 0.0), (0.0, 3.0, 0.0))
+        scaled = transform_paths([shapes.rectangle(2, 2)], fwd)
+        assert footprint(scaled) == pytest.approx(24)
 
 
 class TestShapes:

@@ -7,3 +7,4 @@ from .fillet import fillet_path  # noqa: F401
 from .fit import fit_polyline, simplify_path  # noqa: F401
 from .resample import resample_path  # noqa: F401
 from .cleanup import remove_doubles  # noqa: F401
+from .stack import footprint, stack_levels  # noqa: F401

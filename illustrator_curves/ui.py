@@ -69,6 +69,7 @@ class VIEW3D_PT_illu_path(bpy.types.Panel):
         col.operator("curve.illu_simplify", icon="MOD_DECIM")
         col.operator("curve.illu_resample", icon="MOD_LENGTH")
         col.operator("curve.illu_remove_doubles", icon="X")
+        layout.operator("curve.illu_stack_by_size", icon="SORTSIZE")
         if context.mode == "EDIT_CURVE":
             layout.label(text="Edit Mode: selected points only", icon="RESTRICT_SELECT_OFF")
 
@@ -90,6 +91,7 @@ def object_menu(self, context):
     layout.menu("VIEW3D_MT_illu_pathfinder")
     layout.operator("curve.illu_offset", icon="MOD_SKIN")
     layout.operator("curve.illu_outline_stroke", icon="MOD_OUTLINE")
+    layout.operator("curve.illu_stack_by_size", icon="SORTSIZE")
 
 
 class VIEW3D_MT_illu_pathfinder(bpy.types.Menu):

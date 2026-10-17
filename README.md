@@ -12,6 +12,7 @@ A Blender add-on that brings Adobe Illustrator–style vector tools to Blender c
 | Object › Path › Simplify | **Simplify Path** refits curves with fewer points and keeps sharp corners |
 | Resample (even points by count or distance) | **Resample Path** redistributes points evenly along the curve, keeping sharp corners |
 | Merge by Distance | **Remove Doubles** welds neighboring points closer than a distance, and can close a path whose ends meet |
+| Stack objects by size | **Stack by Size**. The largest selected shape keeps its height, and each smaller shape is placed one layer higher |
 | Rectangle, Ellipse, Polygon, Star tools | **Add › Curve** and sidebar shape buttons, with optional corner radius |
 
 All operators support Blender's *Adjust Last Operation* panel, so you can drag the offset distance, fillet radius and similar values and see the result live.
@@ -20,12 +21,12 @@ All operators support Blender's *Adjust Last Operation* panel, so you can drag t
 
 Requires Blender **4.2 or newer** (tested on 4.5 LTS).
 
-1. Download the prebuilt [`releases/illustrator_curves-1.2.2.zip`](releases/illustrator_curves-1.2.2.zip), or build it yourself:
+1. Download the prebuilt [`releases/illustrator_curves-1.2.3.zip`](releases/illustrator_curves-1.2.3.zip), or build it yourself:
    ```bash
    blender --command extension build --source-dir illustrator_curves --output-dir dist
    ```
    You can also zip the `illustrator_curves/` folder yourself.
-2. In Blender, go to *Edit › Preferences › Get Extensions*, open the ▾ menu, choose **Install from Disk…** and pick `dist/illustrator_curves-1.2.2.zip`.
+2. In Blender, go to *Edit › Preferences › Get Extensions*, open the ▾ menu, choose **Install from Disk…** and pick `dist/illustrator_curves-1.2.3.zip`.
 
 For development, symlink the package into your extensions folder so edits are picked up on restart:
 
@@ -65,6 +66,7 @@ The result keeps the original Bezier segments. Booleans cut the source curves at
 - **Simplify Path** also converts poly splines (for example, from Grease Pencil or the Draw tool) into clean Bezier curves.
 - **Resample Path** spaces points evenly by arc length. *Count* sets how many points each path gets; *Length* targets a distance between them. *Smooth* fits a curve through the new points, and turning it off leaves straight segments. Sharp corners stay put.
 - **Remove Doubles** welds neighboring control points closer than *Distance*. *Weld Ends* closes an open path when its first and last points fall inside that distance. In Edit Mode only selected points are merged.
+- **Stack by Size** orders the selected curve objects by footprint (width times height, in scene units, including object scale). The largest keeps its height. Each smaller shape is placed above it by *Layer Height*, so a stack of overlapping shapes reads from large at the bottom to small at the top. Equal sizes keep their current order.
 
 ## How it works
 
